@@ -1,0 +1,16 @@
+# Dependencies (rebuild with `npm install`)
+node_modules/
+
+# Secrets and local environment
+.env
+.env.local
+.env.*.local
+
+# Private planning notes (kept local, never published)
+START-HERE.md
+
+# Logs and OS clutter
+npm-debug.log*
+*.log
+.DS_Store
+Thumbs.db
