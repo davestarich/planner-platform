@@ -1,11 +1,23 @@
 // The MCP server: it exposes our retirement engine as tools any AI client can call.
 // There is no AI in this file. It just advertises tools and runs the math when asked.
 
+import { join } from 'node:path'
+
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 
 import { computeProjection, computeOnTrack, estimateSocialSecurity } from './calc.js'
+import { getCurrentInflation, getEconomicAssumptions } from './fred.js'
+
+// Load the FRED API key (and any other secrets) from the project's .env file.
+// Wrapped in try/catch so the server still starts if .env is missing; tools that
+// need the key will report a clear error only when they are actually called.
+try {
+  process.loadEnvFile(join(import.meta.dirname, '..', '.env'))
+} catch {
+  // No .env file found; that's fine unless a FRED-backed tool gets called.
+}
 
 // 1. Create the server. The name and version are what the client sees on discovery.
 const server = new McpServer({
@@ -23,7 +35,8 @@ server.registerTool(
     description:
       'Estimate the nest egg someone needs to retire, from their desired monthly ' +
       'spending, years until retirement, and assumptions about inflation, investment ' +
-      'return, and safe withdrawal rate. Returns figures in both future and today dollars.',
+      'return, and safe withdrawal rate. Returns figures in both future and today dollars. ' +
+      'If inflation is omitted, the current rate is pulled live from FRED (real CPI data).',
     inputSchema: {
       monthlySpendToday: z
         .number()
@@ -33,7 +46,11 @@ server.registerTool(
         .describe('Whole years until retirement, e.g. 20'),
       inflationPct: z
         .number()
-        .describe('Assumed annual inflation as a percent, e.g. 3 for 3%'),
+        .optional()
+        .describe(
+          'Assumed annual inflation as a percent, e.g. 3 for 3%. ' +
+            'Optional: if omitted, the current rate is fetched live from FRED.'
+        ),
       returnPct: z
         .number()
         .describe('Assumed annual investment return as a percent, e.g. 6 for 6%'),
@@ -43,12 +60,31 @@ server.registerTool(
     },
   },
   // 3. The handler. The client passes validated arguments; we run the engine and
-  //    return the result. MCP results are a list of "content" items; here we hand
-  //    back the numbers as JSON text so the model can read and explain them.
+  //    return the result. If no inflation was given, we ground it in live FRED data
+  //    and note where the number came from, so the answer is transparent.
   async (args) => {
-    const result = computeProjection(args)
-    return {
-      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+    try {
+      let inflationPct = args.inflationPct
+      let inflationSource = 'provided by caller'
+      if (inflationPct == null) {
+        const live = await getCurrentInflation()
+        inflationPct = live.inflationPct
+        inflationSource = `live from FRED (CPIAUCSL) as of ${live.asOf}`
+      }
+      const result = computeProjection({ ...args, inflationPct })
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({ ...result, inflationPct, inflationSource }, null, 2),
+          },
+        ],
+      }
+    } catch (err) {
+      return {
+        content: [{ type: 'text', text: `Could not run projection: ${err.message}` }],
+        isError: true,
+      }
     }
   }
 )
@@ -118,6 +154,33 @@ server.registerTool(
       content: [
         { type: 'text', text: JSON.stringify({ targetNominal, ...onTrack }, null, 2) },
       ],
+    }
+  }
+)
+
+// Tool 4: current economic assumptions, fetched live from FRED. This is the kind of
+// data a model cannot know on its own, which is exactly what makes it worth a tool.
+server.registerTool(
+  'economic_assumptions',
+  {
+    title: 'Current economic assumptions (live)',
+    description:
+      'Fetch current real-world economic figures from FRED: the latest annual inflation ' +
+      'rate (from CPI) and the 10-year Treasury yield, each with the date it is current as ' +
+      'of. Useful as grounded inputs for a retirement projection. Takes no arguments.',
+    inputSchema: {},
+  },
+  async () => {
+    try {
+      const data = await getEconomicAssumptions()
+      return {
+        content: [{ type: 'text', text: JSON.stringify(data, null, 2) }],
+      }
+    } catch (err) {
+      return {
+        content: [{ type: 'text', text: `Could not fetch economic data: ${err.message}` }],
+        isError: true,
+      }
     }
   }
 )

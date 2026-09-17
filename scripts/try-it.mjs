@@ -50,4 +50,15 @@ await call('retirement_on_track', {
   monthlyContribution: 1500,
 })
 
+// Live data from FRED (needs FRED_API_KEY in .env).
+await call('economic_assumptions', {})
+
+// A projection with NO inflation supplied: the server fills it from live FRED data.
+await call('retirement_projection', {
+  monthlySpendToday: 4000,
+  yearsToRetirement: 20,
+  returnPct: 6,
+  withdrawalPct: 4,
+})
+
 await client.close()
