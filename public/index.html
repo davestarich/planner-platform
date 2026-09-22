@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Planner Platform API</title>
+    <style>
+      :root {
+        --bg: #0f1420;
+        --card: #1a2233;
+        --border: #2b3650;
+        --text: #e7ecf3;
+        --muted: #9aa7bd;
+        --accent: #5b8cff;
+        --code: #0b1020;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.6;
+      }
+      .wrap { max-width: 760px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+      h1 { margin: 0 0 0.25rem; font-size: 1.9rem; }
+      h2 { margin: 2rem 0 0.75rem; font-size: 1.25rem; }
+      .tagline { color: var(--muted); margin: 0 0 1.5rem; }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1.25rem;
+        margin: 1rem 0;
+      }
+      label { display: block; font-size: 0.85rem; color: var(--muted); margin: 0.6rem 0 0.2rem; }
+      input {
+        width: 100%;
+        padding: 0.5rem 0.65rem;
+        background: var(--code);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        color: var(--text);
+        font-size: 0.95rem;
+      }
+      .row { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+      .row > div { flex: 1 1 140px; }
+      button {
+        margin-top: 1rem;
+        padding: 0.55rem 1.1rem;
+        background: var(--accent);
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        font-size: 0.95rem;
+        cursor: pointer;
+      }
+      button.secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
+      pre {
+        background: var(--code);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 1rem;
+        overflow-x: auto;
+        font-size: 0.85rem;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      code { background: var(--code); padding: 0.1rem 0.35rem; border-radius: 5px; font-size: 0.85em; }
+      table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+      th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+      th { color: var(--muted); font-weight: 600; }
+      .method { font-family: monospace; color: var(--accent); }
+      a { color: var(--accent); }
+      footer { margin-top: 2.5rem; color: var(--muted); font-size: 0.85rem; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Planner Platform API</h1>
+      <p class="tagline">Retirement projections over HTTP, grounded in live economic data.</p>
+
+      <h2>Authentication</h2>
+      <p>
+        Every <code>/v1</code> request needs your API key in an <code>x-api-key</code> header.
+        Requests are rate limited per key. Enter your key below to try the endpoints live.
+      </p>
+      <div class="card">
+        <label for="apiKey">Your API key</label>
+        <input id="apiKey" type="text" placeholder="plnr_..." autocomplete="off" />
+      </div>
+
+      <h2>Try it: retirement projection</h2>
+      <div class="card">
+        <div class="row">
+          <div>
+            <label for="spend">Monthly spend today ($)</label>
+            <input id="spend" type="number" value="4000" />
+          </div>
+          <div>
+            <label for="years">Years to retirement</label>
+            <input id="years" type="number" value="20" />
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label for="return">Investment return (%)</label>
+            <input id="return" type="number" value="6" />
+          </div>
+          <div>
+            <label for="withdrawal">Withdrawal rate (%)</label>
+            <input id="withdrawal" type="number" value="4" />
+          </div>
+          <div>
+            <label for="inflation">Inflation (%) — blank = live FRED</label>
+            <input id="inflation" type="number" placeholder="live from FRED" />
+          </div>
+        </div>
+        <button onclick="runProjection()">Run projection</button>
+        <button class="secondary" onclick="runEconomic()">Get live economic data</button>
+      </div>
+
+      <h2>Response</h2>
+      <pre id="output">Enter your API key and run a request to see the response.</pre>
+
+      <h2>Endpoints</h2>
+      <table>
+        <thead>
+          <tr><th>Method</th><th>Path</th><th>What it does</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="method">POST</td><td><code>/v1/projection</code></td><td>Nest egg needed to retire. <code>inflationPct</code> optional (live from FRED if omitted).</td></tr>
+          <tr><td class="method">POST</td><td><code>/v1/on-track</code></td><td>Whether current savings are on track, close, or short.</td></tr>
+          <tr><td class="method">POST</td><td><code>/v1/social-security</code></td><td>Estimated monthly Social Security benefit.</td></tr>
+          <tr><td class="method">GET</td><td><code>/v1/economic-assumptions</code></td><td>Live inflation and 10-year Treasury yield from FRED.</td></tr>
+        </tbody>
+      </table>
+
+      <footer>
+        Source on <a href="https://github.com/davestarich/planner-platform">GitHub</a>.
+        One retirement engine, served three ways: web app, MCP server, and this API.
+      </footer>
+    </div>
+
+    <script>
+      const byId = (id) => document.getElementById(id)
+      const getKey = () => byId('apiKey').value.trim()
+
+      function show(data, status) {
+        const prefix = status ? 'HTTP ' + status + '\n\n' : ''
+        byId('output').textContent = prefix + JSON.stringify(data, null, 2)
+      }
+
+      async function runProjection() {
+        const key = getKey()
+        if (!key) return show({ error: 'Enter your API key above first.' })
+
+        const body = {
+          monthlySpendToday: Number(byId('spend').value),
+          yearsToRetirement: Number(byId('years').value),
+          returnPct: Number(byId('return').value),
+          withdrawalPct: Number(byId('withdrawal').value),
+        }
+        const inflation = byId('inflation').value.trim()
+        if (inflation !== '') body.inflationPct = Number(inflation)
+
+        try {
+          const res = await fetch('/v1/projection', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-api-key': key },
+            body: JSON.stringify(body),
+          })
+          show(await res.json(), res.status)
+        } catch (e) {
+          show({ error: e.message })
+        }
+      }
+
+      async function runEconomic() {
+        const key = getKey()
+        if (!key) return show({ error: 'Enter your API key above first.' })
+        try {
+          const res = await fetch('/v1/economic-assumptions', {
+            headers: { 'x-api-key': key },
+          })
+          show(await res.json(), res.status)
+        } catch (e) {
+          show({ error: e.message })
+        }
+      }
+    </script>
+  </body>
+</html>

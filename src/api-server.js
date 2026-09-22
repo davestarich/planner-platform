@@ -22,8 +22,12 @@ const app = express()
 // Middleware: parse JSON request bodies into req.body on every request.
 app.use(express.json())
 
-// Health check. A GET here confirms the server is up. This one stays public.
-app.get('/', (req, res) => {
+// Serve the developer portal (static files in /public) at the site root, so visiting
+// the server in a browser shows the docs / try-it page.
+app.use(express.static(join(import.meta.dirname, '..', 'public')))
+
+// Health check as JSON at /health. Stays public (no key needed).
+app.get('/health', (req, res) => {
   res.json({ name: 'planner-platform API', status: 'ok' })
 })
 
