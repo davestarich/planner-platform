@@ -1,0 +1,143 @@
+{
+  "info": {
+    "name": "Planner Platform API",
+    "description": "Endpoints for the planner-platform retirement engine, served over HTTP. Set the `baseUrl` collection variable to your server (defaults to http://localhost:3000). When the API is deployed, just change `baseUrl` to the public URL.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "apiKey",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Health check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/",
+          "host": ["{{baseUrl}}"],
+          "path": [""]
+        },
+        "description": "Confirms the server is up."
+      }
+    },
+    {
+      "name": "Economic assumptions (live FRED)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "x-api-key",
+            "value": "{{apiKey}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/v1/economic-assumptions",
+          "host": ["{{baseUrl}}"],
+          "path": ["v1", "economic-assumptions"]
+        },
+        "description": "Current inflation (CPI) and the 10-year Treasury yield, live from FRED. A GET because it only reads data."
+      }
+    },
+    {
+      "name": "Retirement projection",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "x-api-key",
+            "value": "{{apiKey}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"monthlySpendToday\": 4000,\n  \"yearsToRetirement\": 20,\n  \"returnPct\": 6,\n  \"withdrawalPct\": 4\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/v1/projection",
+          "host": ["{{baseUrl}}"],
+          "path": ["v1", "projection"]
+        },
+        "description": "Estimate the nest egg needed to retire. inflationPct is optional: leave it out and the API fills it live from FRED."
+      }
+    },
+    {
+      "name": "On-track check",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "x-api-key",
+            "value": "{{apiKey}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"monthlySpendToday\": 4000,\n  \"yearsToRetirement\": 20,\n  \"inflationPct\": 3,\n  \"returnPct\": 6,\n  \"withdrawalPct\": 4,\n  \"currentAssets\": 150000,\n  \"monthlyContribution\": 1500\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/v1/on-track",
+          "host": ["{{baseUrl}}"],
+          "path": ["v1", "on-track"]
+        },
+        "description": "Whether someone is on track, close, or short of their target."
+      }
+    },
+    {
+      "name": "Social Security estimate",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "x-api-key",
+            "value": "{{apiKey}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"careerAvgIncome\": 65000,\n  \"claimAge\": 67,\n  \"isCouple\": false\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/v1/social-security",
+          "host": ["{{baseUrl}}"],
+          "path": ["v1", "social-security"]
+        },
+        "description": "Estimate a monthly Social Security benefit."
+      }
+    }
+  ]
+}
