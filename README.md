@@ -1,72 +1,96 @@
 # Planner Platform
 
-One retirement calculation engine, served through multiple interfaces. The same
+One retirement calculation engine, served through three interfaces. The same
 pure-math core powers a consumer web app, an [MCP](https://modelcontextprotocol.io)
-server for AI clients, and (next) a public HTTP API for developers.
+server for AI clients, and a public HTTP API for developers.
 
 The idea is to treat a single domain engine as a product and expose it the way each
 audience actually wants to consume it: a UI for end users, tools for AI assistants,
-and an API for other developers.
+and an API for other developers. One engine, three front doors.
 
-## What's here today
+- **Web app** (Future Planner) — the retirement calculator for end users.
+- **MCP server** — the engine as tools any AI client can call.
+- **Public HTTP API** — the engine over HTTP for developers, with API-key auth and
+  rate limiting. Live at **https://planner-platform-opal.vercel.app**.
 
-An MCP server that exposes the retirement engine as four tools any MCP-compatible
-client (Claude Desktop, Cursor, the MCP Inspector, etc.) can call over stdio.
+See [CASE-STUDY.md](CASE-STUDY.md) for the story and the decisions behind it.
+
+## Public HTTP API
+
+Live at **https://planner-platform-opal.vercel.app** (open it in a browser for a
+docs / try-it page). Every `/v1` endpoint needs an API key in an `x-api-key` header
+and is rate limited per key.
+
+| Method | Endpoint | What it does |
+| --- | --- | --- |
+| `POST` | `/v1/projection` | Nest egg needed to retire. `inflationPct` optional (live from FRED if omitted). |
+| `POST` | `/v1/on-track` | Whether current savings are on track, close, or short. |
+| `POST` | `/v1/social-security` | Estimated monthly Social Security benefit. |
+| `GET` | `/v1/economic-assumptions` | Live inflation (CPI) and 10-year Treasury yield from FRED. |
+| `GET` | `/health` | Public health check. |
+
+Example:
+
+```bash
+curl -X POST https://planner-platform-opal.vercel.app/v1/projection \
+  -H "x-api-key: YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"monthlySpendToday":4000,"yearsToRetirement":20,"returnPct":6,"withdrawalPct":4}'
+```
+
+A ready-to-import Postman collection is in [postman/](postman/).
+
+## MCP server
+
+Exposes the same engine as four tools any MCP-compatible client (Claude Desktop,
+Cursor, the MCP Inspector) can call over stdio.
 
 | Tool | What it does |
 | --- | --- |
-| `retirement_projection` | Estimates the nest egg needed to retire, from desired monthly spending and assumptions about inflation, return, and withdrawal rate. If inflation is omitted, it is pulled live from FRED. |
-| `social_security_estimate` | Estimates a monthly Social Security benefit from career-average income, claim age, and household. |
-| `retirement_on_track` | Combines a projection with current savings and contributions to report whether someone is on track, close, or short. |
-| `economic_assumptions` | Fetches current real-world figures from FRED: the latest annual inflation rate (CPI) and the 10-year Treasury yield, each with an as-of date. |
+| `retirement_projection` | Nest egg needed to retire. Inflation pulled live from FRED if omitted. |
+| `social_security_estimate` | Monthly Social Security benefit from career-average income, claim age, and household. |
+| `retirement_on_track` | Projection vs current savings: on track, close, or short. |
+| `economic_assumptions` | Live inflation (CPI) and 10-year Treasury yield from FRED, with as-of dates. |
 
-The math lives in `src/calc.js` as pure functions with no UI, so the same engine can
-back every interface. The MCP server (`src/mcp-server.js`) is a thin layer that
-advertises the tools, validates their inputs, and runs the engine.
+## The shared engine
+
+The math lives in `src/calc.js` as pure functions with no UI, so every interface runs
+the exact same logic. `src/fred.js` grounds projections in live economic data from the
+FRED API. Each front door (MCP tools, HTTP routes) is a thin layer over these.
 
 ## Run it locally
 
 ```bash
 npm install
 
-# Set up your FRED API key (free: https://fredaccount.stlouisfed.org/apikeys)
+# Set up your keys (both are free). .env is gitignored, so keys never enter the repo.
 cp .env.example .env
-# then edit .env and paste your key after FRED_API_KEY=
+# FRED key:  https://fredaccount.stlouisfed.org/apikeys
+# API key:   node -e "console.log('plnr_' + require('crypto').randomBytes(24).toString('hex'))"
+# paste both into .env
 
-# Explore the tools in a browser with the official MCP Inspector
-npm run inspect
-
-# Or run a small test client that connects, lists tools, and calls each one
-node scripts/try-it.mjs
+npm run api        # start the HTTP API at http://localhost:3000
+npm run inspect    # explore the MCP tools in the MCP Inspector
+node scripts/try-it.mjs   # a minimal MCP client that calls each tool
 ```
-
-The FRED key lives only in `.env`, which is gitignored, so it never enters the repo.
-Tools that don't need live data work without a key; the FRED-backed calls report a
-clear error if the key is missing.
-
-## How it works
-
-An MCP server advertises a menu of tools to a client. The client's model decides when
-to call a tool, sends the arguments as JSON, and the server runs the actual code and
-returns a structured result. There is no AI in this server; it is pure computation
-exposed through a standard protocol. Each tool's input schema (built with
-[zod](https://zod.dev)) doubles as its contract and its documentation.
 
 ## Project structure
 
 ```
 src/calc.js         Pure retirement math (the shared engine)
 src/fred.js         Live economic data client (FRED API)
-src/mcp-server.js   MCP server exposing the engine as tools
+src/mcp-server.js   MCP server exposing the engine as tools (stdio)
+src/app.js          The Express HTTP API (routes, auth, rate limiting)
+src/api-server.js   Local starter for the HTTP API
+src/portal.js       The developer portal / try-it page
+api/index.js        Vercel serverless entry point
 scripts/try-it.mjs  A minimal MCP client for local testing
+postman/            A Postman collection for the HTTP API
 ```
-
-## Roadmap
-
-- A public HTTP API for the same engine, with API-key auth and simple developer docs.
 
 ## Tech
 
-Node.js, the [`@modelcontextprotocol/sdk`](https://github.com/modelcontextprotocol),
-zod for input schemas, and the [FRED API](https://fred.stlouisfed.org/docs/api/fred/)
-for live economic data.
+Node.js, Express, the
+[`@modelcontextprotocol/sdk`](https://github.com/modelcontextprotocol), zod for input
+schemas, the [FRED API](https://fred.stlouisfed.org/docs/api/fred/) for live economic
+data, and Vercel for deployment.
