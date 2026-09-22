@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "One retirement engine, served three ways: web app, MCP server, and public API.",
   "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "start": "node src/mcp-server.js",
     "inspect": "npx @modelcontextprotocol/inspector node src/mcp-server.js",
