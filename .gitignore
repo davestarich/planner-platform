@@ -9,6 +9,9 @@ node_modules/
 # Private planning notes (kept local, never published)
 START-HERE.md
 
+# Local editor config (machine-specific paths)
+.cursor/
+
 # Logs and OS clutter
 npm-debug.log*
 *.log
