@@ -1,4 +1,8 @@
-<!doctype html>
+// The developer portal page, served as a string. Keeping it in code (rather than a
+// static file) means it works everywhere, including Vercel's serverless filesystem
+// where runtime file reads are not reliably bundled. app.js serves this at GET /.
+
+export default `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -147,7 +151,8 @@
       const getKey = () => byId('apiKey').value.trim()
 
       function show(data, status) {
-        const prefix = status ? 'HTTP ' + status + '\n\n' : ''
+        const gap = String.fromCharCode(10, 10)
+        const prefix = status ? 'HTTP ' + status + gap : ''
         byId('output').textContent = prefix + JSON.stringify(data, null, 2)
       }
 
@@ -191,3 +196,4 @@
     </script>
   </body>
 </html>
+`

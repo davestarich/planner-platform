@@ -8,6 +8,7 @@ import express from 'express'
 
 import { computeProjection, computeOnTrack, estimateSocialSecurity } from './calc.js'
 import { getCurrentInflation, getEconomicAssumptions } from './fred.js'
+import portalHtml from './portal.js'
 
 // Locally, load secrets from .env. On Vercel there is no .env file (the variables are
 // provided by the platform), so this throws and we simply ignore it.
@@ -22,9 +23,11 @@ const app = express()
 // Middleware: parse JSON request bodies into req.body on every request.
 app.use(express.json())
 
-// Serve the developer portal (static files in /public) at the site root. On Vercel,
-// static files are served by the platform, so this mainly matters for local runs.
-app.use(express.static(join(import.meta.dirname, '..', 'public')))
+// Serve the developer portal at the site root. We send the HTML string directly
+// (rather than a static file) so it works identically locally and on Vercel.
+app.get('/', (req, res) => {
+  res.type('html').send(portalHtml)
+})
 
 // Health check as JSON at /health. Stays public (no key needed).
 app.get('/health', (req, res) => {
