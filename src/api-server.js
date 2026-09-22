@@ -54,6 +54,41 @@ function requireApiKey(req, res, next) {
 // Protect everything under /v1. The health check above is not affected.
 app.use('/v1', requireApiKey)
 
+// Simple in-memory rate limiter: at most RATE_LIMIT_MAX requests per key per window.
+// (In production this counter would live in a shared store like Redis so it survives
+// restarts and works across multiple server instances. The logic is the same.)
+const RATE_LIMIT_MAX = 5
+const RATE_WINDOW_MS = 15000
+const hits = new Map() // apiKey -> { count, resetAt }
+
+function rateLimit(req, res, next) {
+  const key = req.get('x-api-key') // auth already ran, so a valid key is present
+  const now = Date.now()
+
+  let record = hits.get(key)
+  if (!record || now >= record.resetAt) {
+    // First request, or the previous window has expired: start a fresh window.
+    record = { count: 0, resetAt: now + RATE_WINDOW_MS }
+    hits.set(key, record)
+  }
+  record.count++
+
+  // Tell the caller their limit and how many requests they have left.
+  res.set('X-RateLimit-Limit', String(RATE_LIMIT_MAX))
+  res.set('X-RateLimit-Remaining', String(Math.max(0, RATE_LIMIT_MAX - record.count)))
+
+  if (record.count > RATE_LIMIT_MAX) {
+    const retryAfter = Math.ceil((record.resetAt - now) / 1000)
+    res.set('Retry-After', String(retryAfter))
+    return res
+      .status(429)
+      .json({ error: `Rate limit exceeded. Try again in ${retryAfter}s.` })
+  }
+  next()
+}
+
+app.use('/v1', rateLimit)
+
 // Retirement projection. inflationPct is optional: if omitted, we fetch it live from
 // FRED, exactly like the MCP tool, so both front doors behave the same.
 app.post('/v1/projection', async (req, res) => {
